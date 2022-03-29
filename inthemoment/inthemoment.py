@@ -93,7 +93,7 @@ class ITM(object):
         """
         # ---------------------------------------------------------------------
         print("The subset has the following parameters")
-        set_data = self._model_moments(self._get_moments(self.subset))
+        set_data = self._get_moments(self.subset)
         mu_subset = set_data[0]
         sig_subset = set_data[1]
         print('mu_subset=', mu_subset, ' sig_subset=', sig_subset)
