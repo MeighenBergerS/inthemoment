@@ -14,8 +14,6 @@ Authors:
 
 Welcome to ITM!
 
-![Logo](images/Fennel.png)
-
 A python package to do some method of moments testing.
 
 ## Citation <a name="citation"></a>
