@@ -1,0 +1,15 @@
+.*.sw*
+
+*.pyc
+.ipynb_checkpoints
+
+venv3
+
+*.json
+
+build
+dist
+*.pyx
+*.pyd
+*.csv
+*.png

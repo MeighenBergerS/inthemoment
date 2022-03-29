@@ -1,0 +1,7 @@
+jupyter
+pyyaml
+nbstripout
+matplotlib
+numpy
+scipy
+flake8
