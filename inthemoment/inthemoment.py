@@ -10,9 +10,12 @@ from scipy import stats
 from scipy.integrate import quad
 import scipy.optimize as opt
 import numpy.linalg as lin
+from time import time
+from scipy.linalg import solve
 # -----------------------------------------
 # Package modules
 from .config import config
+from .utils import *
 
 
 class ITM(object):
@@ -110,6 +113,7 @@ class ITM(object):
         print('mu_GMM1=', mu_GMM1, ' sig_GMM1=', sig_GMM1)
         # ---------------------------------------------------------------------
         print("Re-Running the fit with improved errors")
+        start_t = time()
         # Improving the weighting matrix
         err1 = self._err_vec(self.subset, results.x, simple=False)
         # Need to reshape for the matrix
@@ -127,9 +131,14 @@ class ITM(object):
             method='L-BFGS-B', bounds=((1e-10, None), (1e-10, None)))
         mu_GMM2, sig_GMM2 = results.x
         print('mu_GMM2=', mu_GMM2, ' sig_GMM2=', sig_GMM2)
+        end_t = time()
+        print("GMM took %e seconds" % (end_t - start_t))
         # ---------------------------------------------------------------------
         print("Running scipy to compare")
+        start_t = time()
         mu_scipy, sig_scipy = stats.norm.fit(self.subset)
+        end_t = time()
+        print("Norm fit took %e seconds" % (end_t - start_t))
         print('mu_scipy=', mu_scipy, ' sig_GMM2=', sig_scipy)
         return np.array([
             [mu_subset, sig_subset],
@@ -267,3 +276,105 @@ class ITM(object):
         err = self._err_vec(data, moments, simple=False)
         critical_val = np.dot(np.dot(err.T, W_hat), err)
         return critical_val
+
+    def rebin(
+            self,
+            bin_content: np.array,
+            old_grid: np.array,
+            new_grid_edges: np.array,
+            binning_scheme="Log",
+            negatives=False):
+        """ Rebins the binned counts to the new desired grid. This function
+        uses a method of moments approach. Currently using 3 moments.
+
+        Parameters
+        ----------
+        bin_contents: np.array
+            The binned content which should be rebinned.
+        old_grid: np.array
+            The old grid's midpoints. The shape needs to be the same
+            as bin_contents.
+        new_grid_edges: np.array
+            The new bins to use. These are the edeges of the grid.
+        binning_scheme: str
+            The binning scheme to use. Choices are "Log" (logarithmic)
+            or "Lin" (linear). This decides how to calculate the midpoints
+            of each bin.
+        negatives: bool
+            Switch to keep or remove negative values in the final binning.
+
+        Returns
+        -------
+        new_content: np.array
+            The new binned counts for the grid
+        new_grid: np.array
+            The bin midpoints used
+        new_widths: np.array
+            The bin widths used
+        new_edges: np.array
+            The edges used. These are the same as the ones passed
+
+        Warnings
+        --------
+        ValueError:
+            Unknown binning scheme
+
+        Notes
+        -----
+        TODO:
+            1) Expand to multiple dimensions
+            2) Deal with edge cases for the new grid
+            3) Fix the normalization. Unified approach for pure positive
+               would be neat.
+        """
+        # Setting up the new grid
+        if binning_scheme == "Log":
+            new_grid = np.sqrt(new_grid_edges[1:] * new_grid_edges[:-1])
+        elif binning_scheme == "Lin":
+            new_grid = (new_grid_edges[1:] + new_grid_edges[:-1]) / 2.
+        else:
+            ValueError("Unknown binning scheme! 'Log' and 'Lin' supported")
+        new_widths = new_grid[1:] - new_grid[:-1]
+        new_edges = new_grid_edges
+        # Checking if shapes align
+        if bin_content.shape != old_grid.shape:
+            ValueError("Bin content and old grid do not have the same shape!")
+        # Unfilled new list
+        new_content = np.zeros(new_grid.shape)
+        # Looping over the old bin contents and distributing
+        for id_val, bin_val in enumerate(bin_content):
+            # Ignore bins without values
+            if bin_val == 0.:
+                continue
+            tmp_grid_val = old_grid[id_val]
+            new_point = (np.abs(new_grid - tmp_grid_val)).argmin()
+
+            # Setting up the equation for 3 moments (mat*x = b)
+            # x is the values we want
+            # NOTE: +2 since for upper bounds the value is not used
+            mat = np.vstack(
+                (
+                    new_widths[new_point - 1:new_point + 2],
+                    new_widths[new_point - 1:new_point + 2] *
+                    new_grid[new_point - 1:new_point + 2],
+                    new_widths[new_point - 1:new_point + 2] *
+                    new_grid[new_point - 1:new_point + 2]**2
+                )
+            )
+            b = bin_val * np.array([
+                1.,
+                tmp_grid_val,
+                tmp_grid_val**2
+            ])
+            # Solving and adding to the new content
+            tmp_new_content = solve(
+                mat, b
+            )
+            new_content[new_point - 1:new_point + 2] += tmp_new_content
+        if not negatives:
+            new_content[new_content < 0.] = 0.
+        # TODO: Remove this dependency
+        new_content = (
+            new_content / (np.sum(new_content) / np.sum(bin_content))
+        )
+        return new_content, new_grid, new_widths, new_edges
