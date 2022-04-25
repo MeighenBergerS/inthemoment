@@ -334,7 +334,7 @@ class ITM(object):
             new_grid = (new_grid_edges[1:] + new_grid_edges[:-1]) / 2.
         else:
             ValueError("Unknown binning scheme! 'Log' and 'Lin' supported")
-        new_widths = new_grid[1:] - new_grid[:-1]
+        new_widths = new_grid_edges[1:] - new_grid_edges[:-1]
         new_edges = new_grid_edges
         # Checking if shapes align
         if bin_content.shape != old_grid.shape:
